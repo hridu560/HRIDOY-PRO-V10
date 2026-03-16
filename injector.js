@@ -1,7 +1,7 @@
 (function() {
     'use strict';
-    if (window.HRIDOY_FAST_LOAD) return;
-    window.HRIDOY_FAST_LOAD = true;
+    if (window.HRIDOY_PRO_FIXED) return;
+    window.HRIDOY_PRO_FIXED = true;
 
     const PARAMS = { gain: 1.0, rageGain: 0, turbo: false, noise: 1, deep: 0 };
 
@@ -73,29 +73,31 @@
 
     navigator.mediaDevices.getUserMedia = async (c) => {
         const raw = await Object.getPrototypeOf(navigator.mediaDevices).getUserMedia.call(navigator.mediaDevices, c);
-        return c.audio ? await Core.build(raw) : raw;
+        return (c.audio && window.DiscordContext) ? await Core.build(raw) : raw;
     };
 
     const UI = {
         init() {
             const div = document.createElement('div');
             div.id = 'h-ui';
+            div.style = "position:fixed; top:100px; left:20px; width:200px; background:#000; border:2px solid #f00; z-index:999999; font-family:monospace; touch-action:none; box-shadow:0 0 15px #f00; color:#f00;";
             div.innerHTML = `
                 <div id="h-drag" style="padding:10px; background:#000; display:flex; justify-content:space-between; border-bottom:1px solid #f00; cursor:move;">
-                    <span style="font-weight:bold; color:#f00; font-size:12px;">HRIDOY PRO FAST</span>
-                    <div id="h-min" style="cursor:pointer; color:#f00;">—</div>
+                    <span style="font-weight:bold; font-size:12px;">HRIDOY PRO V10</span>
+                    <div id="h-min" style="cursor:pointer; color:#f00; font-weight:bold;">—</div>
                 </div>
                 <div id="h-body" style="padding:12px; background:#050000;">
+                    <div style="font-size:10px; margin-bottom:5px;">GAIN:</div>
                     <input type="range" id="gain" min="1" max="250" value="1" style="width:100%; accent-color:#f00;">
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:10px;">
                         <button id="btn-deep" class="b">DEEP</button>
                         <button id="btn-noise" class="b" style="background:#f00; color:#000;">NOISE</button>
                     </div>
-                    <button id="h-turbo" style="width:100%; margin-top:8px; background:#300; border:1px solid #f00; height:35px; color:#f00; font-weight:bold;">TERMINATOR MODE</button>
+                    <button id="h-turbo" style="width:100%; margin-top:10px; background:#300; border:1px solid #f00; height:35px; color:#f00; font-weight:bold; cursor:pointer;">TERMINATOR MODE</button>
                 </div>
                 <style>
-                    #h-ui { position: fixed; top: 100px; left: 20px; width: 190px; background: #000; border: 2px solid #f00; z-index: 999999; font-family: monospace; touch-action: none; box-shadow: 0 0 15px #f00; }
-                    .b { background: #111; color: #f00; border: 1px solid #600; padding: 6px; font-size: 10px; cursor: pointer; }
+                    .b { background: #111; color: #f00; border: 1px solid #600; padding: 6px; font-size: 10px; cursor: pointer; font-weight: bold; }
+                    .active { background: #f00 !important; color: #000 !important; }
                 </style>
             `;
             document.body.appendChild(div);
@@ -103,11 +105,12 @@
         },
         bind(el) {
             const body = document.getElementById('h-body');
-            document.getElementById('h-min').onclick = () => body.style.display = body.style.display === 'none' ? 'block' : 'none';
+            document.getElementById('h-min').onclick = () => {
+                body.style.display = body.style.display === 'none' ? 'block' : 'none';
+            };
             document.getElementById('btn-deep').onclick = (e) => {
                 PARAMS.deep = PARAMS.deep ? 0 : 1;
-                e.target.style.background = PARAMS.deep ? "#f00" : "#111";
-                e.target.style.color = PARAMS.deep ? "#000" : "#f00";
+                e.target.classList.toggle('active');
                 Core.update();
             };
             document.getElementById('btn-noise').onclick = (e) => {
@@ -122,30 +125,36 @@
                 e.target.style.color = PARAMS.turbo ? "#000" : "#f00";
                 Core.update();
             };
-            document.getElementById('gain').oninput = (e) => { PARAMS.gain = parseFloat(e.target.value); Core.update(); };
+            document.getElementById('gain').oninput = (e) => { 
+                PARAMS.gain = parseFloat(e.target.value); 
+                Core.update(); 
+            };
             
-            // Fast Drag Logic
             let d = false, ox, oy;
             const h = document.getElementById('h-drag');
-            const s = (e) => { d = true; const c = e.touches ? e.touches[0] : e; ox = c.clientX - el.offsetLeft; oy = c.clientY - el.offsetTop; };
-            const m = (e) => { if(d) { const c = e.touches ? e.touches[0] : e; el.style.left = (c.clientX - ox) + 'px'; el.style.top = (c.clientY - oy) + 'px'; }};
-            h.onmousedown = s; h.ontouchstart = s;
-            document.onmousemove = m; document.ontouchmove = m;
-            document.onmouseup = () => d = false; document.ontouchend = () => d = false;
+            const s = (e) => { 
+                d = true; 
+                const c = e.touches ? e.touches[0] : e; 
+                ox = c.clientX - el.offsetLeft; 
+                oy = c.clientY - el.offsetTop; 
+            };
+            const m = (e) => { 
+                if(d) { 
+                    const c = e.touches ? e.touches[0] : e; 
+                    el.style.left = (c.clientX - ox) + 'px'; 
+                    el.style.top = (c.clientY - oy) + 'px'; 
+                }
+            };
+            h.addEventListener('mousedown', s);
+            h.addEventListener('touchstart', s);
+            document.addEventListener('mousemove', m);
+            document.addEventListener('touchmove', m);
+            document.addEventListener('mouseup', () => d = false);
+            document.addEventListener('touchend', () => d = false);
         }
     };
 
-    // লোড টাইম কমানোর জন্য ১ সেকেন্ড পরেই প্যানেল আসবে
-    setTimeout(() => UI.init(), 1000);
-})();     }
-    };
-
-    setTimeout(() => UI.init(), 1000);
-})();ntY; };
-            document.onmousemove = e => { if(dragging){ el.style.left = (e.clientX + offset.x) + 'px'; el.style.top = (e.clientY + offset.y) + 'px'; }};
-            document.onmouseup = () => dragging = false;
-        }
-    };
-
-    setTimeout(() => UI.init(), 1000);
+    setTimeout(() => {
+        UI.init();
+    }, 1500);
 })();
