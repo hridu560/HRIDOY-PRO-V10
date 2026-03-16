@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "HRIDOY PRO TERMINATOR",
-  "version": "10.3",
+  "version": "10.5",
   "permissions": ["activeTab", "scripting"],
   "host_permissions": ["*://discord.com/*"],
   "content_scripts": [
