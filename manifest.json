@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "HRIDOY PRO TERMINATOR",
+  "version": "10.0",
+  "description": "The Ultimate Audio Dominance System by HRIDOY",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["*://discord.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["*://discord.com/*"],
+      "js": ["injector.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}
