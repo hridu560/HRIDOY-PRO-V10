@@ -1,42 +1,59 @@
 (function() {
     'use strict';
-    if (window.HRIDOY_PRO_FIXED) return;
-    window.HRIDOY_PRO_FIXED = true;
+    if (window.HRIDOY_ENDGAME_V10) return;
+    window.HRIDOY_ENDGAME_V10 = true;
 
-    const PARAMS = { gain: 1.0, rageGain: 0, turbo: false, noise: 1, deep: 0 };
+    const PARAMS = { gain: 1.0, turbo: false, noise: 0, deep: 0 };
 
     const WORKLET_CODE = `
-        class FastTerminator extends AudioWorkletProcessor {
+        class HridoyEndGame extends AudioWorkletProcessor {
             static get parameterDescriptors() {
                 return [
                     { name: 'gain', defaultValue: 1.0 },
-                    { name: 'rage', defaultValue: 0.0 },
                     { name: 'deep', defaultValue: 0.0 },
-                    { name: 'noise', defaultValue: 1.0 }
+                    { name: 'noise', defaultValue: 0.0 }
                 ];
             }
-            constructor() { super(); this.phase = 0; }
+            constructor() { 
+                super(); 
+                this.buffer = new Float32Array(4096);
+                this.ptr = 0;
+            }
             process(inputs, outputs, p) {
-                const input = inputs[0];
-                const output = outputs[0];
-                if (!input || !input[0]) return true;
+                const input = inputs[0][0];
+                const output = outputs[0][0];
+                if (!input) return true;
 
-                for (let i = 0; i < input[0].length; i++) {
-                    let s = input[0][i];
-                    if (p.noise[0] > 0.5 && Math.abs(s) < 0.012) s = 0;
-                    if (p.deep[0] > 0.5) {
-                        this.phase += 0.5;
-                        s = input[0][Math.floor(this.phase) % input[0].length];
+                for (let i = 0; i < input.length; i++) {
+                    let s = input[i];
+
+                    // 1. INDEPENDENT NOISE KILLER (Alada Logic)
+                    if (p.noise[0] > 0.5) {
+                        s = (Math.abs(s) < 0.025) ? 0 : s * 1.2;
                     }
-                    s *= p.gain[0] * (1 + (p.rage[0] * 15));
-                    s = Math.tanh(s * 1.3);
-                    output[0][i] = s;
-                    if (output[1]) output[1][i] = s;
+
+                    // 2. EXTREME DEEP VOICE (Frequency Shifter)
+                    if (p.deep[0] > 0.5) {
+                        this.buffer[this.ptr] = s;
+                        s = this.buffer[Math.floor(this.ptr / 2.2)]; // Pura Demon Voice
+                        this.ptr = (this.ptr + 1) % 4096;
+                    }
+
+                    // 3. MASTER GAIN & GOD MODE (Destruction)
+                    let boost = p.gain[0];
+                    s *= boost;
+
+                    // Hard Compression to prevent clipping but keep it loud
+                    s = Math.tanh(s * 1.5); 
+                    s = Math.max(-0.98, Math.min(0.98, s));
+
+                    output[i] = s;
+                    if (outputs[0][1]) outputs[0][1][i] = s;
                 }
                 return true;
             }
         }
-        registerProcessor('fast-terminator', FastTerminator);
+        registerProcessor('hridoy-engine', HridoyEndGame);
     `;
 
     const NativeAudio = window.AudioContext || window.webkitAudioContext;
@@ -55,7 +72,7 @@
             if(!ctx) return stream;
             const source = ctx.createMediaStreamSource(stream);
             const dest = ctx.createMediaStreamDestination();
-            this.node = new AudioWorkletNode(ctx, 'fast-terminator');
+            this.node = new AudioWorkletNode(ctx, 'hridoy-engine');
             this.update();
             source.connect(this.node);
             this.node.connect(dest);
@@ -64,8 +81,8 @@
         update() {
             if (!this.node) return;
             const p = this.node.parameters, t = window.DiscordContext.currentTime;
-            p.get('gain').setTargetAtTime(PARAMS.turbo ? 400 : PARAMS.gain, t, 0.05);
-            p.get('rage').setTargetAtTime(PARAMS.turbo ? 800 : PARAMS.rageGain, t, 0.05);
+            // Turbo Mode = 200x Power
+            p.get('gain').setTargetAtTime(PARAMS.turbo ? 200 : PARAMS.gain, t, 0.05);
             p.get('deep').setTargetAtTime(PARAMS.deep, t, 0.05);
             p.get('noise').setTargetAtTime(PARAMS.noise, t, 0.05);
         }
@@ -73,31 +90,35 @@
 
     navigator.mediaDevices.getUserMedia = async (c) => {
         const raw = await Object.getPrototypeOf(navigator.mediaDevices).getUserMedia.call(navigator.mediaDevices, c);
-        return (c.audio && window.DiscordContext) ? await Core.build(raw) : raw;
+        if (c.audio && window.DiscordContext) return await Core.build(raw);
+        return raw;
     };
 
     const UI = {
         init() {
             const div = document.createElement('div');
             div.id = 'h-ui';
-            div.style = "position:fixed; top:100px; left:20px; width:200px; background:#000; border:2px solid #f00; z-index:999999; font-family:monospace; touch-action:none; box-shadow:0 0 15px #f00; color:#f00;";
+            div.style = "position:fixed; top:100px; left:20px; width:200px; background:#000; border:2px solid #f00; z-index:999999; font-family:monospace; touch-action:none; box-shadow:0 0 20px #f00; border-radius:10px; overflow:hidden;";
             div.innerHTML = `
-                <div id="h-drag" style="padding:10px; background:#000; display:flex; justify-content:space-between; border-bottom:1px solid #f00; cursor:move;">
-                    <span style="font-weight:bold; font-size:12px;">HRIDOY PRO V10</span>
-                    <div id="h-min" style="cursor:pointer; color:#f00; font-weight:bold;">—</div>
+                <div id="h-drag" style="padding:12px; background:#f00; color:#000; font-weight:900; cursor:move; display:flex; justify-content:space-between; font-size:12px;">
+                    <span>HRIDOY PRO V10.5</span>
+                    <span id="h-min" style="cursor:pointer;">—</span>
                 </div>
-                <div id="h-body" style="padding:12px; background:#050000;">
-                    <div style="font-size:10px; margin-bottom:5px;">GAIN:</div>
-                    <input type="range" id="gain" min="1" max="250" value="1" style="width:100%; accent-color:#f00;">
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px; margin-top:10px;">
-                        <button id="btn-deep" class="b">DEEP</button>
-                        <button id="btn-noise" class="b" style="background:#f00; color:#000;">NOISE</button>
+                <div id="h-body" style="padding:15px; background:#000;">
+                    <div style="font-size:10px; color:#f00; margin-bottom:5px; font-weight:bold;">MASTER GAIN: <span id="v-txt">1x</span></div>
+                    <input type="range" id="gain" min="1" max="150" value="1" style="width:100%; accent-color:#f00;">
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:15px;">
+                        <button id="btn-deep" class="b">DEEP VOICE</button>
+                        <button id="btn-noise" class="b">NOISE KILL</button>
                     </div>
-                    <button id="h-turbo" style="width:100%; margin-top:10px; background:#300; border:1px solid #f00; height:35px; color:#f00; font-weight:bold; cursor:pointer;">TERMINATOR MODE</button>
+                    
+                    <button id="h-turbo" style="width:100%; margin-top:12px; background:#111; border:1px solid #f00; height:45px; color:#f00; font-weight:bold; cursor:pointer; font-size:12px; transition: 0.3s;">GOD MODE: OFF</button>
+                    <div style="font-size:8px; color:#555; text-align:center; margin-top:10px;">TARGET: MOHOLLA BANGLADESH</div>
                 </div>
                 <style>
-                    .b { background: #111; color: #f00; border: 1px solid #600; padding: 6px; font-size: 10px; cursor: pointer; font-weight: bold; }
-                    .active { background: #f00 !important; color: #000 !important; }
+                    .b { background: #111; color: #f00; border: 1px solid #444; padding: 10px; font-size: 10px; cursor: pointer; border-radius: 5px; font-weight:bold; }
+                    .active { background: #f00 !important; color: #000 !important; box-shadow: 0 0 10px #f00; }
                 </style>
             `;
             document.body.appendChild(div);
@@ -115,46 +136,30 @@
             };
             document.getElementById('btn-noise').onclick = (e) => {
                 PARAMS.noise = PARAMS.noise ? 0 : 1;
-                e.target.style.background = PARAMS.noise ? "#f00" : "#111";
-                e.target.style.color = PARAMS.noise ? "#000" : "#f00";
+                e.target.classList.toggle('active');
                 Core.update();
             };
             document.getElementById('h-turbo').onclick = (e) => {
                 PARAMS.turbo = !PARAMS.turbo;
-                e.target.style.background = PARAMS.turbo ? "#f00" : "#300";
-                e.target.style.color = PARAMS.turbo ? "#000" : "#f00";
+                e.target.classList.toggle('active');
+                e.target.innerText = PARAMS.turbo ? "GOD MODE: ACTIVE" : "GOD MODE: OFF";
                 Core.update();
             };
             document.getElementById('gain').oninput = (e) => { 
-                PARAMS.gain = parseFloat(e.target.value); 
+                PARAMS.gain = parseFloat(e.target.value);
+                document.getElementById('v-txt').innerText = PARAMS.gain + "x";
                 Core.update(); 
             };
             
             let d = false, ox, oy;
             const h = document.getElementById('h-drag');
-            const s = (e) => { 
-                d = true; 
-                const c = e.touches ? e.touches[0] : e; 
-                ox = c.clientX - el.offsetLeft; 
-                oy = c.clientY - el.offsetTop; 
-            };
-            const m = (e) => { 
-                if(d) { 
-                    const c = e.touches ? e.touches[0] : e; 
-                    el.style.left = (c.clientX - ox) + 'px'; 
-                    el.style.top = (c.clientY - oy) + 'px'; 
-                }
-            };
-            h.addEventListener('mousedown', s);
-            h.addEventListener('touchstart', s);
-            document.addEventListener('mousemove', m);
-            document.addEventListener('touchmove', m);
-            document.addEventListener('mouseup', () => d = false);
-            document.addEventListener('touchend', () => d = false);
+            const start = (e) => { d = true; const c = e.touches ? e.touches[0] : e; ox = c.clientX - el.offsetLeft; oy = c.clientY - el.offsetTop; };
+            const move = (e) => { if(d) { const c = e.touches ? e.touches[0] : e; el.style.left = (c.clientX - ox) + 'px'; el.style.top = (c.clientY - oy) + 'px'; }};
+            h.onmousedown = start; h.ontouchstart = start;
+            document.onmousemove = move; document.ontouchmove = move;
+            document.onmouseup = () => d = false; document.ontouchend = () => d = false;
         }
     };
 
-    setTimeout(() => {
-        UI.init();
-    }, 1500);
+    setTimeout(() => UI.init(), 1500);
 })();
