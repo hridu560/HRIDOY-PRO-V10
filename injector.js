@@ -1,12 +1,12 @@
 (function() {
     'use strict';
-    if (window.HRIDOY_ENDGAME_V10) return;
-    window.HRIDOY_ENDGAME_V10 = true;
+    if (window.HRIDOY_TERMINATOR_FIXED) return;
+    window.HRIDOY_TERMINATOR_FIXED = true;
 
     const PARAMS = { gain: 1.0, turbo: false, noise: 0, deep: 0 };
 
     const WORKLET_CODE = `
-        class HridoyEndGame extends AudioWorkletProcessor {
+        class HridoyFinalEngine extends AudioWorkletProcessor {
             static get parameterDescriptors() {
                 return [
                     { name: 'gain', defaultValue: 1.0 },
@@ -16,7 +16,7 @@
             }
             constructor() { 
                 super(); 
-                this.buffer = new Float32Array(4096);
+                this.buffer = new Float32Array(8192);
                 this.ptr = 0;
             }
             process(inputs, outputs, p) {
@@ -27,25 +27,24 @@
                 for (let i = 0; i < input.length; i++) {
                     let s = input[i];
 
-                    // 1. INDEPENDENT NOISE KILLER (Alada Logic)
+                    // 1. INDEPENDENT NOISE KILLER
                     if (p.noise[0] > 0.5) {
-                        s = (Math.abs(s) < 0.025) ? 0 : s * 1.2;
+                        s = (Math.abs(s) < 0.02) ? 0 : s * 1.3;
                     }
 
-                    // 2. EXTREME DEEP VOICE (Frequency Shifter)
+                    // 2. EXTREME DEEP VOICE (True Demon Shift)
                     if (p.deep[0] > 0.5) {
                         this.buffer[this.ptr] = s;
-                        s = this.buffer[Math.floor(this.ptr / 2.2)]; // Pura Demon Voice
-                        this.ptr = (this.ptr + 1) % 4096;
+                        s = this.buffer[Math.floor(this.ptr / 2)]; 
+                        this.ptr = (this.ptr + 1) % 8192;
                     }
 
-                    // 3. MASTER GAIN & GOD MODE (Destruction)
-                    let boost = p.gain[0];
-                    s *= boost;
+                    // 3. MASTER GAIN & GOD MODE
+                    s *= p.gain[0];
 
-                    // Hard Compression to prevent clipping but keep it loud
-                    s = Math.tanh(s * 1.5); 
-                    s = Math.max(-0.98, Math.min(0.98, s));
+                    // Hard Compression & Limiter (Extreme Loudness)
+                    s = Math.tanh(s * 1.6); 
+                    s = Math.max(-0.99, Math.min(0.99, s));
 
                     output[i] = s;
                     if (outputs[0][1]) outputs[0][1][i] = s;
@@ -53,7 +52,7 @@
                 return true;
             }
         }
-        registerProcessor('hridoy-engine', HridoyEndGame);
+        registerProcessor('hridoy-engine', HridoyFinalEngine);
     `;
 
     const NativeAudio = window.AudioContext || window.webkitAudioContext;
@@ -81,8 +80,8 @@
         update() {
             if (!this.node) return;
             const p = this.node.parameters, t = window.DiscordContext.currentTime;
-            // Turbo Mode = 200x Power
-            p.get('gain').setTargetAtTime(PARAMS.turbo ? 200 : PARAMS.gain, t, 0.05);
+            // Turbo Mode = 250x Power
+            p.get('gain').setTargetAtTime(PARAMS.turbo ? 250 : PARAMS.gain, t, 0.05);
             p.get('deep').setTargetAtTime(PARAMS.deep, t, 0.05);
             p.get('noise').setTargetAtTime(PARAMS.noise, t, 0.05);
         }
@@ -98,27 +97,26 @@
         init() {
             const div = document.createElement('div');
             div.id = 'h-ui';
-            div.style = "position:fixed; top:100px; left:20px; width:200px; background:#000; border:2px solid #f00; z-index:999999; font-family:monospace; touch-action:none; box-shadow:0 0 20px #f00; border-radius:10px; overflow:hidden;";
+            div.style = "position:fixed; top:50px; left:20px; width:220px; background:#000; border:2px solid #f00; z-index:999999; font-family:monospace; touch-action:none; box-shadow:0 0 25px #f00; border-radius:10px; overflow:hidden; color:#fff;";
             div.innerHTML = `
-                <div id="h-drag" style="padding:12px; background:#f00; color:#000; font-weight:900; cursor:move; display:flex; justify-content:space-between; font-size:12px;">
-                    <span>HRIDOY PRO V10.5</span>
-                    <span id="h-min" style="cursor:pointer;">—</span>
+                <div id="h-drag" style="padding:15px; background:#f00; color:#000; font-weight:900; cursor:move; display:flex; justify-content:space-between; font-size:14px; text-transform:uppercase;">
+                    <span>HRIDOY PRO V10</span>
+                    <span id="h-min" style="cursor:pointer;">[—]</span>
                 </div>
                 <div id="h-body" style="padding:15px; background:#000;">
-                    <div style="font-size:10px; color:#f00; margin-bottom:5px; font-weight:bold;">MASTER GAIN: <span id="v-txt">1x</span></div>
-                    <input type="range" id="gain" min="1" max="150" value="1" style="width:100%; accent-color:#f00;">
+                    <div style="font-size:11px; color:#f00; margin-bottom:8px; font-weight:bold;">GAIN POWER: <span id="v-txt">1x</span></div>
+                    <input type="range" id="gain" min="1" max="150" value="1" style="width:100%; accent-color:#f00; margin-bottom:15px;">
                     
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:15px;">
-                        <button id="btn-deep" class="b">DEEP VOICE</button>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                        <button id="btn-deep" class="b">DEEP MODE</button>
                         <button id="btn-noise" class="b">NOISE KILL</button>
                     </div>
                     
-                    <button id="h-turbo" style="width:100%; margin-top:12px; background:#111; border:1px solid #f00; height:45px; color:#f00; font-weight:bold; cursor:pointer; font-size:12px; transition: 0.3s;">GOD MODE: OFF</button>
-                    <div style="font-size:8px; color:#555; text-align:center; margin-top:10px;">TARGET: MOHOLLA BANGLADESH</div>
+                    <button id="h-turbo" style="width:100%; margin-top:15px; background:#111; border:2px solid #f00; height:50px; color:#f00; font-weight:bold; cursor:pointer; font-size:13px;">GOD MODE: OFF</button>
                 </div>
                 <style>
-                    .b { background: #111; color: #f00; border: 1px solid #444; padding: 10px; font-size: 10px; cursor: pointer; border-radius: 5px; font-weight:bold; }
-                    .active { background: #f00 !important; color: #000 !important; box-shadow: 0 0 10px #f00; }
+                    .b { background: #111; color: #f00; border: 1px solid #f00; padding: 12px; font-size: 10px; cursor: pointer; border-radius: 5px; font-weight:bold; transition: 0.2s; }
+                    .active { background: #f00 !important; color: #000 !important; box-shadow: 0 0 15px #f00; }
                 </style>
             `;
             document.body.appendChild(div);
@@ -127,7 +125,9 @@
         bind(el) {
             const body = document.getElementById('h-body');
             document.getElementById('h-min').onclick = () => {
-                body.style.display = body.style.display === 'none' ? 'block' : 'none';
+                const isHidden = body.style.display === 'none';
+                body.style.display = isHidden ? 'block' : 'none';
+                document.getElementById('h-min').innerText = isHidden ? '[—]' : '[+]';
             };
             document.getElementById('btn-deep').onclick = (e) => {
                 PARAMS.deep = PARAMS.deep ? 0 : 1;
@@ -161,5 +161,5 @@
         }
     };
 
-    setTimeout(() => UI.init(), 1500);
+    setTimeout(() => UI.init(), 1200);
 })();
