@@ -1,22 +1,28 @@
 (function() {
     'use strict';
-    if (window.HRIDOY_TERMINATOR_FIXED) return;
-    window.HRIDOY_TERMINATOR_FIXED = true;
+    if (window.HRIDOY_PREMIUM_ACTIVE) return;
+    window.HRIDOY_PREMIUM_ACTIVE = true;
 
-    const PARAMS = { gain: 1.0, turbo: false, noise: 0, deep: 0 };
+    // Independent Parameters
+    const PARAMS = { 
+        master: 1.0, 
+        deep: 0.0, 
+        noise: 0.0, 
+        turbo: false 
+    };
 
     const WORKLET_CODE = `
-        class HridoyFinalEngine extends AudioWorkletProcessor {
+        class HridoyPremiumEngine extends AudioWorkletProcessor {
             static get parameterDescriptors() {
                 return [
-                    { name: 'gain', defaultValue: 1.0 },
+                    { name: 'master', defaultValue: 1.0 },
                     { name: 'deep', defaultValue: 0.0 },
                     { name: 'noise', defaultValue: 0.0 }
                 ];
             }
             constructor() { 
                 super(); 
-                this.buffer = new Float32Array(8192);
+                this.buf = new Float32Array(16384);
                 this.ptr = 0;
             }
             process(inputs, outputs, p) {
@@ -27,23 +33,25 @@
                 for (let i = 0; i < input.length; i++) {
                     let s = input[i];
 
-                    // 1. INDEPENDENT NOISE KILLER
-                    if (p.noise[0] > 0.5) {
-                        s = (Math.abs(s) < 0.02) ? 0 : s * 1.3;
+                    // Noise Module (Independent Power)
+                    if (p.noise[0] > 0) {
+                        const threshold = p.noise[0] * 0.06;
+                        if (Math.abs(s) < threshold) s = 0;
                     }
 
-                    // 2. EXTREME DEEP VOICE (True Demon Shift)
-                    if (p.deep[0] > 0.5) {
-                        this.buffer[this.ptr] = s;
-                        s = this.buffer[Math.floor(this.ptr / 2)]; 
-                        this.ptr = (this.ptr + 1) % 8192;
+                    // Deep Demon Module (Independent Power)
+                    if (p.deep[0] > 0) {
+                        this.buf[this.ptr] = s;
+                        let offset = 1.2 + (p.deep[0] * 1.8); 
+                        s = this.buf[Math.floor(this.ptr / offset)]; 
+                        this.ptr = (this.ptr + 1) % 16384;
                     }
 
-                    // 3. MASTER GAIN & GOD MODE
-                    s *= p.gain[0];
+                    // Master Gain Power
+                    s *= p.master[0];
 
-                    // Hard Compression & Limiter (Extreme Loudness)
-                    s = Math.tanh(s * 1.6); 
+                    // High-End Limiter (No Distortion)
+                    s = Math.tanh(s * 1.2);
                     s = Math.max(-0.99, Math.min(0.99, s));
 
                     output[i] = s;
@@ -52,7 +60,7 @@
                 return true;
             }
         }
-        registerProcessor('hridoy-engine', HridoyFinalEngine);
+        registerProcessor('premium-engine', HridoyPremiumEngine);
     `;
 
     const NativeAudio = window.AudioContext || window.webkitAudioContext;
@@ -71,7 +79,7 @@
             if(!ctx) return stream;
             const source = ctx.createMediaStreamSource(stream);
             const dest = ctx.createMediaStreamDestination();
-            this.node = new AudioWorkletNode(ctx, 'hridoy-engine');
+            this.node = new AudioWorkletNode(ctx, 'premium-engine');
             this.update();
             source.connect(this.node);
             this.node.connect(dest);
@@ -80,8 +88,7 @@
         update() {
             if (!this.node) return;
             const p = this.node.parameters, t = window.DiscordContext.currentTime;
-            // Turbo Mode = 250x Power
-            p.get('gain').setTargetAtTime(PARAMS.turbo ? 250 : PARAMS.gain, t, 0.05);
+            p.get('master').setTargetAtTime(PARAMS.turbo ? 350 : PARAMS.master, t, 0.05);
             p.get('deep').setTargetAtTime(PARAMS.deep, t, 0.05);
             p.get('noise').setTargetAtTime(PARAMS.noise, t, 0.05);
         }
@@ -96,70 +103,102 @@
     const UI = {
         init() {
             const div = document.createElement('div');
-            div.id = 'h-ui';
-            div.style = "position:fixed; top:50px; left:20px; width:220px; background:#000; border:2px solid #f00; z-index:999999; font-family:monospace; touch-action:none; box-shadow:0 0 25px #f00; border-radius:10px; overflow:hidden; color:#fff;";
+            div.id = 'h-premium-ui';
+            div.style = "position:fixed; top:50px; left:15px; width:230px; background:#000; border:1px solid #0f0; z-index:999999; font-family:sans-serif; color:#0f0; box-shadow:0 0 20px rgba(0,255,0,0.4); border-radius:10px; overflow:hidden;";
             div.innerHTML = `
-                <div id="h-drag" style="padding:15px; background:#f00; color:#000; font-weight:900; cursor:move; display:flex; justify-content:space-between; font-size:14px; text-transform:uppercase;">
-                    <span>HRIDOY PRO V10</span>
+                <div id="h-drag" style="padding:15px; background:#0f0; color:#000; font-weight:900; cursor:move; display:flex; justify-content:space-between; font-size:12px; letter-spacing:1px;">
+                    <span>HRIDOY PRO V12.5</span>
                     <span id="h-min" style="cursor:pointer;">[—]</span>
                 </div>
-                <div id="h-body" style="padding:15px; background:#000;">
-                    <div style="font-size:11px; color:#f00; margin-bottom:8px; font-weight:bold;">GAIN POWER: <span id="v-txt">1x</span></div>
-                    <input type="range" id="gain" min="1" max="150" value="1" style="width:100%; accent-color:#f00; margin-bottom:15px;">
+                <div id="h-body" style="padding:20px; display:flex; flex-direction:column; gap:20px; background:linear-gradient(180deg, #000 0%, #050505 100%);">
                     
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                        <button id="btn-deep" class="b">DEEP MODE</button>
-                        <button id="btn-noise" class="b">NOISE KILL</button>
+                    <div class="control-group">
+                        <label>MASTER POWER: <span id="m-val">1x</span></label>
+                        <input type="range" id="m-range" min="1" max="150" value="1">
                     </div>
+
+                    <div class="control-group">
+                        <label>DEEP INTENSITY: <span id="d-val">0</span></label>
+                        <input type="range" id="d-range" min="0" max="10" step="0.1" value="0">
+                        <button id="d-btn" class="p-btn">DEEP MODULE: OFF</button>
+                    </div>
+
+                    <div class="control-group">
+                        <label>NOISE FILTER: <span id="n-val">0</span></label>
+                        <input type="range" id="n-range" min="0" max="10" step="0.1" value="0">
+                        <button id="n-btn" class="p-btn">NOISE KILL: OFF</button>
+                    </div>
+
+                    <button id="h-turbo" class="turbo-btn">INITIALIZE GOD MODE</button>
                     
-                    <button id="h-turbo" style="width:100%; margin-top:15px; background:#111; border:2px solid #f00; height:50px; color:#f00; font-weight:bold; cursor:pointer; font-size:13px;">GOD MODE: OFF</button>
+                    <div style="font-size:9px; color:#050; text-align:center; border-top:1px solid #111; padding-top:10px;">PREMIUM HARDCORE ENGINE ACTIVE</div>
                 </div>
                 <style>
-                    .b { background: #111; color: #f00; border: 1px solid #f00; padding: 12px; font-size: 10px; cursor: pointer; border-radius: 5px; font-weight:bold; transition: 0.2s; }
-                    .active { background: #f00 !important; color: #000 !important; box-shadow: 0 0 15px #f00; }
+                    .control-group { display:flex; flex-direction:column; gap:8px; }
+                    .control-group label { font-size:10px; font-weight:bold; color:#0a0; }
+                    input[type=range] { accent-color:#0f0; cursor:pointer; background:#111; height:4px; border-radius:2px; }
+                    .p-btn { background:#000; border:1px solid #0f0; color:#0f0; padding:8px; font-size:9px; cursor:pointer; border-radius:4px; font-weight:bold; transition:0.3s; }
+                    .turbo-btn { background:#010; border:2px solid #0f0; color:#0f0; padding:12px; font-weight:900; cursor:pointer; border-radius:6px; font-size:11px; box-shadow:0 0 10px rgba(0,255,0,0.2); }
+                    .active { background:#0f0 !important; color:#000 !important; box-shadow:0 0 15px #0f0; }
                 </style>
             `;
             document.body.appendChild(div);
-            this.bind(div);
+            this.bind();
         },
-        bind(el) {
+        bind() {
+            const el = document.getElementById('h-premium-ui');
             const body = document.getElementById('h-body');
-            document.getElementById('h-min').onclick = () => {
-                const isHidden = body.style.display === 'none';
-                body.style.display = isHidden ? 'block' : 'none';
-                document.getElementById('h-min').innerText = isHidden ? '[—]' : '[+]';
+            
+            // Slider Listeners
+            document.getElementById('m-range').oninput = (e) => { 
+                PARAMS.master = parseFloat(e.target.value); 
+                document.getElementById('m-val').innerText = e.target.value + "x"; 
+                Core.update(); 
             };
-            document.getElementById('btn-deep').onclick = (e) => {
-                PARAMS.deep = PARAMS.deep ? 0 : 1;
-                e.target.classList.toggle('active');
+            document.getElementById('d-range').oninput = (e) => { 
+                PARAMS.deep = parseFloat(e.target.value); 
+                document.getElementById('d-val').innerText = e.target.value; 
+                Core.update(); 
+            };
+            document.getElementById('n-range').oninput = (e) => { 
+                PARAMS.noise = parseFloat(e.target.value); 
+                document.getElementById('n-val').innerText = e.target.value; 
+                Core.update(); 
+            };
+
+            // Button Listeners
+            document.getElementById('d-btn').onclick = (e) => {
+                const on = e.target.classList.toggle('active');
+                e.target.innerText = on ? "DEEP MODULE: ONLINE" : "DEEP MODULE: OFF";
+                if(!on) { PARAMS.deep = 0; document.getElementById('d-range').value = 0; document.getElementById('d-val').innerText = "0"; }
                 Core.update();
             };
-            document.getElementById('btn-noise').onclick = (e) => {
-                PARAMS.noise = PARAMS.noise ? 0 : 1;
-                e.target.classList.toggle('active');
+            document.getElementById('n-btn').onclick = (e) => {
+                const on = e.target.classList.toggle('active');
+                e.target.innerText = on ? "NOISE KILL: ONLINE" : "NOISE KILL: OFF";
+                if(!on) { PARAMS.noise = 0; document.getElementById('n-range').value = 0; document.getElementById('n-val').innerText = "0"; }
                 Core.update();
             };
             document.getElementById('h-turbo').onclick = (e) => {
                 PARAMS.turbo = !PARAMS.turbo;
                 e.target.classList.toggle('active');
-                e.target.innerText = PARAMS.turbo ? "GOD MODE: ACTIVE" : "GOD MODE: OFF";
+                e.target.innerText = PARAMS.turbo ? "GOD MODE: ACTIVE (350X)" : "INITIALIZE GOD MODE";
                 Core.update();
             };
-            document.getElementById('gain').oninput = (e) => { 
-                PARAMS.gain = parseFloat(e.target.value);
-                document.getElementById('v-txt').innerText = PARAMS.gain + "x";
-                Core.update(); 
+
+            // Minimize
+            document.getElementById('h-min').onclick = () => {
+                body.style.display = body.style.display === 'none' ? 'flex' : 'none';
             };
-            
+
+            // Premium Drag Logic
             let d = false, ox, oy;
             const h = document.getElementById('h-drag');
-            const start = (e) => { d = true; const c = e.touches ? e.touches[0] : e; ox = c.clientX - el.offsetLeft; oy = c.clientY - el.offsetTop; };
-            const move = (e) => { if(d) { const c = e.touches ? e.touches[0] : e; el.style.left = (c.clientX - ox) + 'px'; el.style.top = (c.clientY - oy) + 'px'; }};
-            h.onmousedown = start; h.ontouchstart = start;
-            document.onmousemove = move; document.ontouchmove = move;
-            document.onmouseup = () => d = false; document.ontouchend = () => d = false;
+            h.onmousedown = (e) => { d = true; ox = e.clientX - el.offsetLeft; oy = e.clientY - el.offsetTop; };
+            document.onmousemove = (e) => { if(d) { el.style.left = (e.clientX - ox) + 'px'; el.style.top = (e.clientY - oy) + 'px'; }};
+            document.onmouseup = () => d = false;
         }
     };
 
-    setTimeout(() => UI.init(), 1200);
+    setTimeout(() => UI.init(), 1000);
 })();
