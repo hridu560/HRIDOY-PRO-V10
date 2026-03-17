@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "HRIDOY PRO TERMINATOR",
-  "version": "10.6",
+  "name": "HRIDOY PRO V12.5",
+  "description": "Premium High-Gain Audio Engine",
+  "version": "12.5.0",
   "permissions": ["activeTab", "scripting"],
   "host_permissions": ["*://discord.com/*"],
   "content_scripts": [
